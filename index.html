@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Predicción de aprobación – MLOps EAN</title>
+<style>
+  :root {
+    --fondo: #f4f6f9;
+    --tarjeta: #ffffff;
+    --texto: #1c2430;
+    --suave: #5b6675;
+    --borde: #d5dbe3;
+    --primario: #1f4e8c;
+    --primario-hover: #183e70;
+    --ok-fondo: #e6f4ea;
+    --ok-texto: #146c2e;
+    --mal-fondo: #fdecea;
+    --mal-texto: #a3261d;
+    --aviso-fondo: #fff7e0;
+    --aviso-texto: #6b4d00;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--fondo);
+    color: var(--texto);
+    line-height: 1.5;
+  }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 32px 16px 48px;
+  }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  header p { margin: 0 0 24px; color: var(--suave); }
+  form {
+    background: var(--tarjeta);
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    padding: 24px;
+    display: grid;
+    gap: 18px;
+  }
+  .campo label { display: block; font-weight: 600; margin-bottom: 4px; }
+  .campo input, .campo select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 1rem;
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--texto);
+  }
+  .campo input:focus, .campo select:focus {
+    outline: 2px solid var(--primario);
+    outline-offset: 1px;
+  }
+  .ayuda { font-size: 0.85rem; color: var(--suave); margin-top: 4px; }
+  .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 520px) { .fila { grid-template-columns: 1fr; } }
+  button {
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--primario);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--primario-hover); }
+  button:disabled { opacity: 0.6; cursor: wait; }
+  #estado {
+    margin-top: 20px;
+    padding: 16px;
+    border-radius: 10px;
+    display: none;
+  }
+  #estado.visible { display: block; }
+  #estado.cargando { background: var(--aviso-fondo); color: var(--aviso-texto); }
+  #estado.aprueba { background: var(--ok-fondo); color: var(--ok-texto); border: 2px solid var(--ok-texto); }
+  #estado.reprueba { background: var(--mal-fondo); color: var(--mal-texto); border: 2px solid var(--mal-texto); }
+  #estado.error { background: var(--mal-fondo); color: var(--mal-texto); }
+  .resultado { font-size: 1.8rem; font-weight: 700; margin: 0; }
+  .detalle { margin: 6px 0 0; }
+  #estado ul { margin: 8px 0 0; padding-left: 20px; }
+  footer { margin-top: 24px; font-size: 0.8rem; color: var(--suave); text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>¿Aprobará el curso?</h1>
+    <p>Ingresa los datos del estudiante y el modelo desplegado en Azure + Databricks estimará si aprueba.</p>
+  </header>
+
+  <form id="formulario" novalidate>
+    <div class="fila">
+      <div class="campo">
+        <label for="horas_estudio">Horas de estudio</label>
+        <input type="number" id="horas_estudio" name="horas_estudio" min="0" max="24" step="0.1" value="7.5" required>
+        <div class="ayuda">Horas por día · entre 0 y 24</div>
+      </div>
+      <div class="campo">
+        <label for="horas_sueno">Horas de sueño</label>
+        <input type="number" id="horas_sueno" name="horas_sueno" min="0" max="24" step="0.1" value="7" required>
+        <div class="ayuda">Horas por día · entre 0 y 24</div>
+      </div>
+    </div>
+
+    <div class="fila">
+      <div class="campo">
+        <label for="asistencia">Asistencia</label>
+        <input type="number" id="asistencia" name="asistencia" min="0" max="100" step="0.1" value="90" required>
+        <div class="ayuda">Porcentaje · entre 0 y 100</div>
+      </div>
+      <div class="campo">
+        <label for="promedio_previo">Promedio previo</label>
+        <input type="number" id="promedio_previo" name="promedio_previo" min="0" max="5" step="0.1" value="4.2" required>
+        <div class="ayuda">Escala de 0 a 5</div>
+      </div>
+    </div>
+
+    <div class="campo">
+      <label for="indice_dedicacion">Índice de dedicación</label>
+      <input type="number" id="indice_dedicacion" name="indice_dedicacion" min="0" step="0.1" value="8" required>
+      <div class="ayuda">Mayor o igual a 0</div>
+    </div>
+
+    <div class="fila">
+      <div class="campo">
+        <label for="en_riesgo">¿En riesgo académico?</label>
+        <select id="en_riesgo" name="en_riesgo">
+          <option value="0" selected>No</option>
+          <option value="1">Sí</option>
+        </select>
+        <div class="ayuda">0 = No · 1 = Sí</div>
+      </div>
+      <div class="campo">
+        <label for="destacado">¿Estudiante destacado?</label>
+        <select id="destacado" name="destacado">
+          <option value="0">No</option>
+          <option value="1" selected>Sí</option>
+        </select>
+        <div class="ayuda">0 = No · 1 = Sí</div>
+      </div>
+    </div>
+
+    <button type="submit" id="boton">Predecir</button>
+  </form>
+
+  <div id="estado" role="status" aria-live="polite"></div>
+
+  <footer>Taller MLOps · Universidad EAN · Página en Azure Storage → API en Azure Container Apps → modelo en Databricks</footer>
+</main>
+
+<script>
+  const API_URL = "https://api-mlops-ean.nicefield-d64c8f5a.westus.azurecontainerapps.io/predecir";
+
+  const formulario = document.getElementById("formulario");
+  const boton = document.getElementById("boton");
+  const estado = document.getElementById("estado");
+
+  const CAMPOS_DECIMALES = ["horas_estudio", "horas_sueno", "asistencia", "promedio_previo", "indice_dedicacion"];
+  const CAMPOS_ENTEROS = ["en_riesgo", "destacado"];
+
+  function mostrar(clase, html) {
+    estado.className = "visible " + clase;
+    estado.innerHTML = html;
+  }
+
+  function escapar(texto) {
+    const div = document.createElement("div");
+    div.textContent = String(texto);
+    return div.innerHTML;
+  }
+
+  function construirCuerpo() {
+    const cuerpo = {};
+    for (const campo of CAMPOS_DECIMALES) {
+      cuerpo[campo] = parseFloat(document.getElementById(campo).value);
+    }
+    for (const campo of CAMPOS_ENTEROS) {
+      cuerpo[campo] = parseInt(document.getElementById(campo).value, 10);
+    }
+    return cuerpo;
+  }
+
+  formulario.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const cuerpo = construirCuerpo();
+
+    boton.disabled = true;
+    mostrar("cargando", "Consultando el modelo. La primera consulta puede tardar hasta 2 minutos si el servicio estaba apagado.");
+
+    try {
+      const respuesta = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cuerpo)
+      });
+
+      let datos = null;
+      try { datos = await respuesta.json(); } catch (e) { datos = null; }
+
+      if (respuesta.status === 200 && datos) {
+        const aprueba = datos.prediccion === 1;
+        mostrar(
+          aprueba ? "aprueba" : "reprueba",
+          `<p class="resultado">${escapar(datos.resultado)}</p>
+           <p class="detalle">Predicción del modelo: <strong>${escapar(datos.prediccion)}</strong> (${aprueba ? "1 = aprueba" : "0 = reprueba"})</p>`
+        );
+      } else if (respuesta.status === 422 && datos && Array.isArray(datos.detail)) {
+        const items = datos.detail.map((d) => {
+          const campo = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : "campo";
+          return `<li><strong>${escapar(campo)}</strong>: ${escapar(d.msg)}</li>`;
+        }).join("");
+        mostrar("error", `<strong>Datos fuera de rango (422).</strong> Revisa estos campos:<ul>${items}</ul>`);
+      } else if ((respuesta.status === 502 || respuesta.status === 504) && datos) {
+        mostrar("error", `<strong>Error ${respuesta.status}:</strong> ${escapar(datos.detail)}`);
+      } else {
+        const detalle = datos && datos.detail ? escapar(typeof datos.detail === "string" ? datos.detail : JSON.stringify(datos.detail)) : "Respuesta inesperada de la API.";
+        mostrar("error", `<strong>Error ${respuesta.status}:</strong> ${detalle}`);
+      }
+    } catch (error) {
+      mostrar("error", "<strong>No hubo conexión con la API.</strong> Revisa que la dirección en API_URL sea correcta y que la API esté publicada.");
+    } finally {
+      boton.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
